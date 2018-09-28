@@ -3,6 +3,7 @@
 #include <time.h>
 #include <stdlib.h>
 #include "asa241.h"
+#include "omp.h"
 
 double TSLA[] = {
     379.810,
@@ -281,7 +282,9 @@ int main() {
 
     int totalValues = sizeof(TSLA) / sizeof(double);
     int simulationLength = 20;
+    int maxProcessors = omp_get_num_procs();
     int totalSteps = 100;
+    int stepsByProcessor = (int)ceil(totalSteps / maxProcessors);
 
     double TSLA_PDR[totalValues], TSLA_SIM[simulationLength], average, variance, drift;
     double sum = 0.0;
@@ -317,13 +320,26 @@ int main() {
     printf("Variance: %f\n", variance);
     printf("stdDev: %f\n", stdDev);
     printf("drift: %f\n", drift);
+    printf("# processors: %i\n", maxProcessors);
 
-    for(int step = 0; step < totalSteps; step++){
-        printf("--------------------------\n");
-        printf("-- Monte Carlo / Step %i --\n", step);
-        printf("--------------------------\n");
+    #pragma omp parallel num_threads(maxProcessors)
+    {
+        int processorNum  = omp_get_thread_num();
+        int minStep = processorNum * stepsByProcessor;
+        int maxStep = (processorNum + 1) * stepsByProcessor;
 
-        computeStep(simulationLength, TSLA_SIM, totalValues, stdDev, drift);
+        if(maxStep > totalSteps){
+            maxStep = totalSteps;
+        }
+
+        printf("Range: [%i,%i]\n", minStep, maxStep);
+
+        for(int step = minStep; step < maxStep; step++){
+            printf("--------------------------\n");
+            printf("-- Monte Carlo / Step %i --\n", step);
+            printf("--------------------------\n");
+            computeStep(simulationLength, TSLA_SIM, totalValues, stdDev, drift);
+        }
     }
 
     return 0;
